@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -10,7 +11,17 @@ import (
 	"github.com/bondhansarker/exif_metadata/file_template"
 )
 
-func handler(ctx context.Context, s3Event events.S3Event) (*exif_metadata.StructuredFileMetadata, error) {
+type MediaObject struct {
+	Type       string                   `json:"type"`
+	Extension  string                   `json:"extension"`
+	Size       string                   `json:"size"`
+	Resolution exif_metadata.Resolution `json:"resolution"`
+	Location   exif_metadata.Location   `json:"location"`
+	Timestamp  int64                    `json:"timestamp"`
+	Errors     []string                 `json:"errors"`
+}
+
+func handler(ctx context.Context, s3Event events.S3Event) (*MediaObject, error) {
 	record := s3Event.Records[0]
 	s3Key := record.S3.Object.Key
 	s3Bucket := record.S3.Bucket.Name
@@ -32,12 +43,43 @@ func handler(ctx context.Context, s3Event events.S3Event) (*exif_metadata.Struct
 		log.Fatal(err)
 		return nil, err
 	}
-	_, structuredMetadata, err := exif_metadata.FetchMetaData(fileObject)
+	metaDataObject, err := exif_metadata.FetchMetaData(fileObject)
 	if err != nil {
 		log.Fatal(err)
 		return nil, err
 	}
-	return structuredMetadata, nil
+
+	mediaObject := &MediaObject{
+		Type:      metaDataObject.ContentInfo.Type,
+		Size:      metaDataObject.ContentInfo.Size,
+		Extension: metaDataObject.ContentInfo.Extension,
+		Errors:    make([]string, 0),
+	}
+
+	resolution, err := metaDataObject.Resolution()
+	if err != nil {
+		fmt.Println(err)
+		mediaObject.Errors = append(mediaObject.Errors, err.Error())
+	} else {
+		mediaObject.Resolution = *resolution
+	}
+
+	location, err := metaDataObject.Location()
+	if err != nil {
+		fmt.Println(err)
+		mediaObject.Errors = append(mediaObject.Errors, err.Error())
+	} else {
+		mediaObject.Location = *location
+	}
+
+	timestamp, err := metaDataObject.DateTime()
+	if err != nil {
+		fmt.Println(err)
+		mediaObject.Errors = append(mediaObject.Errors, err.Error())
+	} else {
+		mediaObject.Timestamp = timestamp.Timestamp.Unix()
+	}
+	return mediaObject, nil
 }
 
 func main() {
