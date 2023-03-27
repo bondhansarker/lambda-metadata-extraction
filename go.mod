@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/aws/aws-lambda-go v1.38.0
-	github.com/bondhansarker/exif_metadata v0.0.4
+	github.com/bondhansarker/exif_metadata v0.0.5
 )
 
 require (
